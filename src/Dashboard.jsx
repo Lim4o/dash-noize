@@ -8,8 +8,13 @@ import {
   TrendingUp, Settings, ChevronLeft, ChevronRight, Plus, Search,
   Calendar, TrendingDown, AlertTriangle, X, Trash2, ArrowUpRight,
   ArrowDownRight, DollarSign, BarChart3, Target, Award, Users,
-  FileText, Info, PackageOpen, CreditCard, Truck, ChevronDown, Globe
+  FileText, Info, PackageOpen, CreditCard, Truck, ChevronDown, Globe, Check,
+  Minus, Edit3, Clock, LogOut
 } from 'lucide-react';
+import { useAuth } from './AuthContext';
+import { useFirestoreData } from './useFirestoreData';
+import { useActionHistory } from './useActionHistory';
+import PageHistorico from './PageHistorico';
 
 // ─── Translations ───
 const DICT = {
@@ -143,7 +148,14 @@ const DICT = {
     sales: 'Sales',
     total_value: 'Total Value',
     about_desc: 'Advanced local dashboard for managing inventory and global sales.',
-    margin_estimate: 'Estimated margin — may change with new stock or sales.'
+    margin_estimate: 'Estimated margin — may change with new stock or sales.',
+    new_product: 'New Product',
+    add_to_stock: 'Add to Stock',
+    edit_qty: 'Edit Quantity',
+    stock_updated: 'Stock updated!',
+    unique_products: 'Unique Products',
+    history: 'History',
+    logout: 'Logout'
   },
   pt: {
     dashboard: 'Visão Geral',
@@ -275,7 +287,14 @@ const DICT = {
     sales: 'Vendas',
     total_value: 'Valor Total',
     about_desc: 'Painel local avançado para gerenciar estoque e vendas globais.',
-    margin_estimate: 'Margem estimada — pode mudar com novas compras ou vendas.'
+    margin_estimate: 'Margem estimada — pode mudar com novas compras ou vendas.',
+    new_product: 'Novo Produto',
+    add_to_stock: 'Adicionar ao Estoque',
+    edit_qty: 'Editar Quantidade',
+    stock_updated: 'Estoque atualizado!',
+    unique_products: 'Produtos Únicos',
+    history: 'Histórico',
+    logout: 'Sair'
   }
 };
 
@@ -331,8 +350,13 @@ function reducer(state, action) {
     case 'DEL_VENDA': return { ...state, vendas: state.vendas.filter(v => v.id !== action.id) };
     case 'DEL_COMPRA': return { ...state, compras: state.compras.filter(c => c.id !== action.id) };
     case 'DEL_CUSTO': return { ...state, custosFixos: state.custosFixos.filter(c => c.id !== action.id) };
+    case 'UPDATE_COMPRA_STATUS': return { ...state, compras: state.compras.map(c => c.id === action.id ? { ...c, status: action.status } : c) };
+    case 'ADD_ESTOQUE': return { ...state, estoque: [...state.estoque, { ...action.payload, id: Date.now() }] };
+    case 'DEL_ESTOQUE': return { ...state, estoque: state.estoque.filter(e => e.id !== action.id) };
+    case 'UPDATE_ESTOQUE_QTD': return { ...state, estoque: state.estoque.map(e => e.id === action.id ? { ...e, quantidade: Math.max(0, action.quantidade) } : e) };
     case 'RESET_VENDAS': return { ...state, vendas: [] };
     case 'RESET_ESTOQUE': return { ...state, estoque: [], compras: [] };
+    case 'LOAD_STATE': return { ...state, ...action.payload };
     default: return state;
   }
 }
@@ -390,9 +414,17 @@ function loadPersistedState(initial) {
 export default function Dashboard() {
   const [lang, setLang] = useState('pt');
   const t = (key) => DICT[lang][key] || key;
+  const { user, signOut } = useAuth();
 
-  const [state, dispatch] = useReducer(reducer, initialState, loadPersistedState);
+  const [state, rawDispatch] = useReducer(reducer, initialState, loadPersistedState);
+  
+  // Custom hook that logs actions to Firestore
+  const dispatch = useActionHistory(user, rawDispatch, lang);
+  
+  // Custom hook that handles syncing the state to Firestore
+  useFirestoreData(user, state, dispatch);
 
+  // Still keep local storage as fallback/offline mode
   useEffect(() => {
     localStorage.setItem('noize_financial_data', JSON.stringify(state));
   }, [state]);
@@ -446,6 +478,7 @@ export default function Dashboard() {
     { id: 'estoque', label: t('inventory'), icon: Package },
     { id: 'custos', label: t('fixed_costs'), icon: Landmark },
     { id: 'margens', label: t('margins_profit'), icon: TrendingUp },
+    { id: 'historico', label: t('history'), icon: Clock },
   ];
 
   return (
@@ -484,10 +517,17 @@ export default function Dashboard() {
           </div>
           <div className="header-right">
             <div className="period-selector"><Calendar size={14}/> {t('april_2026')} <ChevronDown size={12}/></div>
-            <div className="user-avatar">
-              <div className="avatar-circle">LC</div>
-              <span className="avatar-name">Limão</span>
+            <div className="user-avatar" title={user?.email || 'Guest'}>
+              {user?.photoURL ? (
+                <img src={user.photoURL} alt="User avatar" style={{ width: 32, height: 32, borderRadius: 16 }} />
+              ) : (
+                <div className="avatar-circle">{user?.email?.substring(0,2).toUpperCase() || 'UN'}</div>
+              )}
+              <span className="avatar-name">{user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || 'Usuário'}</span>
             </div>
+            <button className="btn btn-ghost btn-sm" onClick={signOut} title={t('logout')}>
+              <LogOut size={16} />
+            </button>
           </div>
         </header>
 
@@ -496,9 +536,10 @@ export default function Dashboard() {
             {page === 'dashboard' && <PageDashboard metrics={metrics} state={state} dispatch={dispatch} setModal={setModal} chartDataVendas={chartDataVendas} chartDataPagamento={chartDataPagamento} custoFixoPorUnidade={custoFixoPorUnidade} />}
             {page === 'vendas' && <PageVendas state={state} dispatch={dispatch} setModal={setModal} custoFixoPorUnidade={custoFixoPorUnidade} />}
             {page === 'compras' && <PageCompras state={state} dispatch={dispatch} setModal={setModal} />}
-            {page === 'estoque' && <PageEstoque state={state} />}
+            {page === 'estoque' && <PageEstoque state={state} dispatch={dispatch} setModal={setModal} />}
             {page === 'custos' && <PageCustos state={state} dispatch={dispatch} setModal={setModal} />}
             {page === 'margens' && <PageMargens state={state} custoFixoPorUnidade={custoFixoPorUnidade} />}
+            {page === 'historico' && <PageHistorico t={t} />}
             {page === 'config' && <PageConfig dispatch={dispatch} />}
           </div>
         </div>
@@ -508,6 +549,7 @@ export default function Dashboard() {
       {modal === 'venda' && <ModalVenda state={state} dispatch={dispatch} onClose={() => setModal(null)} />}
       {modal === 'compra' && <ModalCompra dispatch={dispatch} onClose={() => setModal(null)} />}
       {modal === 'custo' && <ModalCusto dispatch={dispatch} onClose={() => setModal(null)} />}
+      {modal === 'estoque' && <ModalEstoque dispatch={dispatch} onClose={() => setModal(null)} />}
     </div>
     </I18nContext.Provider>
   );
@@ -718,6 +760,95 @@ function PageVendas({ state, dispatch, setModal, custoFixoPorUnidade }) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// STATUS DROPDOWN
+// ──────────────────────────────────────────────────────────────────────────
+function StatusDropdown({ compraId, currentStatus, dispatch }) {
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef(null);
+
+  useEffect(() => {
+    const handleClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    if (open) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  const statusConfig = {
+    'Comprado': { badge: 'badge-purple', icon: CreditCard, color: '#8b5cf6', nextLabel: 'A Caminho' },
+    'A Caminho': { badge: 'badge-warning', icon: Truck, color: '#f59e0b', nextLabel: 'Chegou' },
+    'Chegou':   { badge: 'badge-success', icon: Check, color: '#10b981', nextLabel: null },
+  };
+
+  const cfg = statusConfig[currentStatus] || statusConfig['Comprado'];
+  const StatusIcon = cfg.icon;
+
+  const handleStatusChange = (newStatus) => {
+    dispatch({ type: 'UPDATE_COMPRA_STATUS', id: compraId, status: newStatus });
+    setOpen(false);
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        className={`badge ${cfg.badge}`}
+        onClick={() => setOpen(!open)}
+        style={{
+          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+          border: 'none', padding: '4px 10px', fontSize: 12, fontWeight: 600,
+          transition: 'all 200ms ease', borderRadius: 6,
+        }}
+        title="Clique para alterar o status"
+      >
+        <StatusIcon size={12} />
+        {currentStatus}
+        <ChevronDown size={10} style={{ marginLeft: 2, opacity: 0.7, transform: open ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 200ms ease' }} />
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50,
+          background: 'var(--bg-primary)', border: '1px solid var(--border)',
+          borderRadius: 10, padding: 6, minWidth: 180,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.4)', backdropFilter: 'blur(12px)',
+          animation: 'fadeIn 150ms ease',
+        }}>
+          <div style={{ padding: '6px 10px', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 2 }}>Alterar Status</div>
+          {STATUSES_COMPRA.map(s => {
+            const sc = statusConfig[s];
+            const Icon = sc.icon;
+            const isActive = s === currentStatus;
+            return (
+              <button
+                key={s}
+                onClick={() => handleStatusChange(s)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                  padding: '8px 10px', border: 'none', borderRadius: 6, cursor: 'pointer',
+                  fontSize: 13, fontWeight: 500, fontFamily: 'Inter, sans-serif',
+                  background: isActive ? `${sc.color}15` : 'transparent',
+                  color: isActive ? sc.color : 'var(--text-secondary)',
+                  transition: 'all 150ms ease',
+                }}
+                onMouseEnter={e => { if (!isActive) { e.target.style.background = 'var(--bg-secondary)'; } }}
+                onMouseLeave={e => { if (!isActive) { e.target.style.background = 'transparent'; } }}
+              >
+                <div style={{
+                  width: 24, height: 24, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: `${sc.color}20`,
+                }}>
+                  <Icon size={13} color={sc.color} />
+                </div>
+                <span style={{ flex: 1, textAlign: 'left' }}>{s}</span>
+                {isActive && <Check size={14} color={sc.color} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // PAGE: COMPRAS
 // ──────────────────────────────────────────────────────────────────────────
 function PageCompras({ state, dispatch, setModal }) {
@@ -748,7 +879,7 @@ function PageCompras({ state, dispatch, setModal }) {
                     <div style={{fontSize:12,color:'var(--text-muted)'}}>{fmtDate(c.dataPedido)} · {c.origem} · {c.modoEnvio}</div>
                   </div>
                   <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                    <span className={`badge ${c.status==='Chegou'?'badge-success':c.status==='A Caminho'?'badge-warning':'badge-purple'}`}>{c.status}</span>
+                    <StatusDropdown compraId={c.id} currentStatus={c.status} dispatch={dispatch} />
                     <button className="btn btn-ghost btn-sm" onClick={() => dispatch({type:'DEL_COMPRA',id:c.id})}><Trash2 size={13}/></button>
                   </div>
                 </div>
@@ -779,7 +910,7 @@ function PageCompras({ state, dispatch, setModal }) {
 // ──────────────────────────────────────────────────────────────────────────
 // PAGE: ESTOQUE
 // ──────────────────────────────────────────────────────────────────────────
-function PageEstoque({ state }) {
+function PageEstoque({ state, dispatch, setModal }) {
   const { t } = useI18n();
   const [search, setSearch] = useState('');
   const [showZero, setShowZero] = useState(false);
@@ -788,9 +919,12 @@ function PageEstoque({ state }) {
   const filtered = state.estoque.filter(e => (showZero || e.quantidade > 0) && (e.produto.toLowerCase().includes(search.toLowerCase()) || e.tamanho.toLowerCase().includes(search.toLowerCase())));
   return (
     <>
-      <div className="summary-cards">
-        <div className="card" style={{padding:16}}><div className="sec-label">{t('total_available')}</div><div className="sec-value" style={{fontSize:22}}>{totalPecas} {t('pieces')}</div></div>
-        <div className="card" style={{padding:16}}><div className="sec-label">{t('inventory_value')}</div><div className="sec-value" style={{fontSize:22}}>{fmt(valorTotal)}</div></div>
+      <div className="action-row" style={{justifyContent:'space-between'}}>
+        <div className="summary-cards" style={{marginBottom:0,flex:1}}>
+          <div className="card" style={{padding:16}}><div className="sec-label">{t('total_available')}</div><div className="sec-value" style={{fontSize:22}}>{totalPecas} {t('pieces')}</div></div>
+          <div className="card" style={{padding:16}}><div className="sec-label">{t('inventory_value')}</div><div className="sec-value" style={{fontSize:22}}>{fmt(valorTotal)}</div></div>
+          <div className="card" style={{padding:16}}><div className="sec-label">{t('unique_products')}</div><div className="sec-value" style={{fontSize:22}}>{state.estoque.length}</div></div>
+        </div>
       </div>
       <div style={{display:'flex',gap:16,marginBottom:20,alignItems:'center',flexWrap:'wrap'}}>
         <div className="search-bar" style={{flex:1}}>
@@ -801,22 +935,44 @@ function PageEstoque({ state }) {
           <div className={`toggle-track ${showZero ? 'on' : ''}`}><div className="toggle-thumb"/></div>
           {t('show_zero_balance')}
         </div>
+        <button className="btn btn-primary" onClick={() => setModal('estoque')}><Plus size={14}/> {t('new_product')}</button>
       </div>
       <div className="card" style={{padding:0,overflow:'hidden'}}>
         {filtered.length === 0 ? (
-          <EmptyState title={t('no_activities')} desc={t('no_activities_desc')}/>
+          <EmptyState title={t('stock_empty')} desc={t('add_purchase_prompt')} action={t('new_product')} onAction={() => setModal('estoque')}/>
         ) : (
           <div className="table-container">
             <table>
-              <thead><tr><th>{t('product')}</th><th>{t('size')}</th><th>{t('qty')}</th><th>{t('avg_cost')}</th><th>{t('total_value')}</th></tr></thead>
+              <thead><tr><th>{t('product')}</th><th>{t('size')}</th><th>{t('qty')}</th><th>{t('avg_cost')}</th><th>{t('total_value')}</th><th>{t('actions')}</th></tr></thead>
               <tbody>
                 {filtered.map(e => (
                   <tr key={e.id}>
                     <td style={{color:'#fff',fontWeight:500}}>{e.produto}</td>
                     <td><span className="badge badge-purple">{e.tamanho}</span></td>
-                    <td style={{fontWeight:600, color: e.quantidade === 0 ? '#ef4444' : '#fff'}}>{e.quantidade}</td>
+                    <td>
+                      <div style={{display:'flex',alignItems:'center',gap:6}}>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{padding:'4px 6px',minWidth:28}}
+                          onClick={() => dispatch({type:'UPDATE_ESTOQUE_QTD', id:e.id, quantidade: e.quantidade - 1})}
+                        >
+                          <Minus size={12}/>
+                        </button>
+                        <span style={{fontWeight:600, color: e.quantidade === 0 ? '#ef4444' : '#fff', minWidth:24, textAlign:'center'}}>{e.quantidade}</span>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{padding:'4px 6px',minWidth:28}}
+                          onClick={() => dispatch({type:'UPDATE_ESTOQUE_QTD', id:e.id, quantidade: e.quantidade + 1})}
+                        >
+                          <Plus size={12}/>
+                        </button>
+                      </div>
+                    </td>
                     <td>{fmt(e.custoMedio)}</td>
                     <td style={{fontWeight:600}}>{fmt(e.quantidade * e.custoMedio)}</td>
+                    <td>
+                      <button className="btn btn-ghost btn-sm" onClick={() => dispatch({type:'DEL_ESTOQUE',id:e.id})}><Trash2 size={13}/></button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1281,6 +1437,33 @@ function ModalCusto({ dispatch, onClose }) {
         <div className="form-group"><label>{t('qty_purchased')}</label><input className="form-input" type="number" value={form.quantidade} onChange={e=>u('quantidade',e.target.value)}/></div>
       </div>
       <div className="preview-box">{t('cost_per_unit')}: <strong>{fmt(cpp)}</strong></div>
+    </Modal>
+  );
+}
+
+function ModalEstoque({ dispatch, onClose }) {
+  const { t } = useI18n();
+  const [form, setForm] = useState({ produto:'', tamanho:'M', quantidade:'1', custoMedio:'' });
+  const u = (k,v) => setForm(p => ({...p, [k]: v}));
+  const totalValue = (parseInt(form.quantidade)||0) * (parseFloat(form.custoMedio)||0);
+  const save = () => {
+    if(!form.produto || !form.custoMedio) return;
+    dispatch({ type:'ADD_ESTOQUE', payload:{ produto:form.produto, tamanho:form.tamanho, quantidade:parseInt(form.quantidade)||0, custoMedio:parseFloat(form.custoMedio)||0 }});
+    onClose();
+  };
+  return (
+    <Modal title={t('new_product')} onClose={onClose} footer={<><button className="btn btn-ghost" onClick={onClose}>{t('cancel')}</button><button className="btn btn-primary" onClick={save}><Plus size={14}/> {t('add_to_stock')}</button></>}>
+      <div className="form-group"><label>{t('product')}</label><input className="form-input" placeholder={t('product_name')} value={form.produto} onChange={e=>u('produto',e.target.value)}/></div>
+      <div className="form-row">
+        <div className="form-group"><label>{t('size')}</label>
+          <select className="form-select" value={form.tamanho} onChange={e=>u('tamanho',e.target.value)}>
+            {['PP','P','M','G','GG','XG','Único'].map(s=><option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="form-group"><label>{t('qty')}</label><input className="form-input" type="number" min="0" value={form.quantidade} onChange={e=>u('quantidade',e.target.value)}/></div>
+      </div>
+      <div className="form-group"><label>{t('avg_cost')} $</label><input className="form-input" type="number" step="0.01" value={form.custoMedio} onChange={e=>u('custoMedio',e.target.value)}/></div>
+      <div className="preview-box">{t('total_value')}: <strong>{fmt(totalValue)}</strong></div>
     </Modal>
   );
 }
