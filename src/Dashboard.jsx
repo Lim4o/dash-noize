@@ -522,7 +522,7 @@ export default function Dashboard() {
       </div>
 
       {/* Modals */}
-      {modal === 'venda' && <ModalVenda state={state} dispatch={dispatch} onClose={() => setModal(null)} />}
+      {modal === 'venda' && <ModalVenda state={state} dispatch={dispatch} user={user} onClose={() => setModal(null)} />}
       {modal === 'compra' && <ModalCompra dispatch={dispatch} onClose={() => setModal(null)} />}
       {modal === 'custo' && <ModalCusto dispatch={dispatch} onClose={() => setModal(null)} />}
       {modal === 'estoque' && <ModalEstoque dispatch={dispatch} onClose={() => setModal(null)} />}
@@ -708,7 +708,7 @@ function PageVendas({ state, dispatch, setModal, custoFixoPorUnidade }) {
         ) : (
           <div className="table-container">
             <table>
-              <thead><tr><th>{t('date')}</th><th>{t('product')}</th><th>{t('channel')}</th><th>{t('amount')}</th><th>{t('payment')}</th><th>{t('profit')}</th><th>{t('margin')}</th><th>{t('actions')}</th></tr></thead>
+              <thead><tr><th>{t('date')}</th><th>{t('product')}</th><th>{t('channel')}</th><th>{t('amount')}</th><th>{t('payment')}</th><th>{t('profit')}</th><th>{t('margin')}</th><th>Vendedor</th><th>{t('actions')}</th></tr></thead>
               <tbody>
                 {state.vendas.filter(v => filterCanal === 'All' || v.canal === filterCanal).map(v => {
                   const lucro = v.valorFinal - v.custoUnitario - custoFixoPorUnidade;
@@ -722,6 +722,7 @@ function PageVendas({ state, dispatch, setModal, custoFixoPorUnidade }) {
                       <td>{v.pagamento}</td>
                       <td style={{color: lucro >= 0 ? '#10b981' : '#ef4444', fontWeight:600}}>{fmt(lucro)}</td>
                       <td><span className={`badge ${margem >= 20 ? 'badge-success' : margem >= 10 ? 'badge-warning' : 'badge-danger'}`}>{fmtPct(margem)}</span></td>
+                      <td style={{fontSize:12, color:'var(--text-muted)'}}>{v.vendedor || '—'}</td>
                       <td><button className="btn btn-ghost btn-sm" onClick={() => dispatch({type:'DEL_VENDA',id:v.id})}><Trash2 size={13}/></button></td>
                     </tr>
                   );
@@ -1305,7 +1306,8 @@ function Toggle({ defaultOn = false }) {
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // MODALS
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-function ModalVenda({ state, dispatch, onClose }) {
+// â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• â• 
+function ModalVenda({ state, dispatch, user, onClose }) {
   const { t } = useI18n();
   const [tipo, setTipo] = useState('estoque');
   const [form, setForm] = useState({ produto:'', canal:'Amazon', pagamento:'Credit Card', valorOriginal:'', desconto:'0', cliente:'', custoUnitario:'', obs:'' });
@@ -1313,7 +1315,8 @@ function ModalVenda({ state, dispatch, onClose }) {
   const valorFinal = (parseFloat(form.valorOriginal)||0) - (parseFloat(form.desconto)||0);
   const save = () => {
     if(!form.produto || !form.valorOriginal) return;
-    dispatch({ type: 'ADD_VENDA', payload: { data: new Date().toISOString().slice(0,10), produto: form.produto, canal: form.canal, pagamento: form.pagamento, valorOriginal: parseFloat(form.valorOriginal), desconto: parseFloat(form.desconto)||0, valorFinal, custoUnitario: parseFloat(form.custoUnitario)||0, cliente: form.cliente, obs: form.obs, tipo }});
+    const vendedorNome = user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || 'Desconhecido';
+    dispatch({ type: 'ADD_VENDA', payload: { data: new Date().toISOString().slice(0,10), produto: form.produto, canal: form.canal, pagamento: form.pagamento, valorOriginal: parseFloat(form.valorOriginal), desconto: parseFloat(form.desconto)||0, valorFinal, custoUnitario: parseFloat(form.custoUnitario)||0, cliente: form.cliente, obs: form.obs, tipo, vendedor: vendedorNome }});
     onClose();
   };
   return (
