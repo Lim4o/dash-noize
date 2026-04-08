@@ -312,34 +312,10 @@ const PAYMENTS = ['Credit Card', 'PayPal', 'Venmo', 'Cash', 'Zelle', 'Apple Pay'
 const STATUSES_COMPRA = ['Comprado', 'A Caminho', 'Chegou'];
 
 const initialState = {
-  vendas: [
-    { id: 1, data: '2026-04-01', produto: 'PSG 24/25 Jersey', canal: 'Amazon', valorOriginal: 49.99, desconto: 0, valorFinal: 49.99, pagamento: 'Credit Card', custoUnitario: 12.00, cliente: 'John Smith', obs: '', tipo: 'estoque' },
-    { id: 2, data: '2026-04-02', produto: 'Real Madrid Jersey', canal: 'Marketplace', valorOriginal: 54.99, desconto: 5, valorFinal: 49.99, pagamento: 'PayPal', custoUnitario: 14.00, cliente: 'Sarah Lee', obs: '', tipo: 'estoque' },
-    { id: 3, data: '2026-04-03', produto: 'Brazil National Kit', canal: 'Instagram', valorOriginal: 64.99, desconto: 0, valorFinal: 64.99, pagamento: 'Venmo', custoUnitario: 16.00, cliente: 'Mike Johnson', obs: '', tipo: 'encomenda' },
-    { id: 4, data: '2026-03-28', produto: 'Barcelona Away Kit', canal: 'TikTok Shop', valorOriginal: 52.99, desconto: 3, valorFinal: 49.99, pagamento: 'Apple Pay', custoUnitario: 13.00, cliente: '', obs: 'Repeat customer', tipo: 'estoque' },
-    { id: 5, data: '2026-03-25', produto: 'Man City Home Jersey', canal: 'Amazon', valorOriginal: 57.99, desconto: 0, valorFinal: 57.99, pagamento: 'Credit Card', custoUnitario: 15.00, cliente: 'Amy Chen', obs: '', tipo: 'estoque' },
-  ],
-  compras: [
-    { id: 1, fornecedor: 'Supplier China Top', origem: 'China', dataPedido: '2026-03-15', status: 'Chegou', modoEnvio: 'Remessa Conforme', frete: 120.00, taxaRemessa: 45.00, itens: [
-      { nome: 'Camiseta PSG 24/25', tamanho: 'M', quantidade: 10, custoYuan: 55, custoReal: 45.00 },
-      { nome: 'Uniforme Real Madrid', tamanho: 'G', quantidade: 8, custoYuan: 65, custoReal: 52.00 },
-    ]},
-    { id: 2, fornecedor: 'Fornecedor Nacional', origem: 'Nacional', dataPedido: '2026-03-20', status: 'A Caminho', modoEnvio: 'Offline', frete: 35.00, taxaRemessa: 0, itens: [
-      { nome: 'Camiseta Brasil', tamanho: 'G', quantidade: 15, custoYuan: 0, custoReal: 60.00 },
-    ]},
-  ],
-  estoque: [
-    { id: 1, produto: 'PSG 24/25 Jersey', tamanho: 'M', quantidade: 7, custoMedio: 12.00 },
-    { id: 2, produto: 'Real Madrid Jersey', tamanho: 'L', quantidade: 5, custoMedio: 14.00 },
-    { id: 3, produto: 'Brazil National Kit', tamanho: 'L', quantidade: 12, custoMedio: 16.00 },
-    { id: 4, produto: 'Barcelona Away Kit', tamanho: 'M', quantidade: 3, custoMedio: 13.00 },
-    { id: 5, produto: 'Man City Home Jersey', tamanho: 'XL', quantidade: 0, custoMedio: 15.00 },
-    { id: 6, produto: 'Flamengo Away Jersey', tamanho: 'S', quantidade: 9, custoMedio: 10.00 },
-  ],
-  custosFixos: [
-    { id: 1, nome: 'Custom poly mailer bag', valorTotal: 45.00, quantidade: 150 },
-    { id: 2, nome: 'Brand hang tag', valorTotal: 30.00, quantidade: 300 },
-  ],
+  vendas: [],
+  compras: [],
+  estoque: [],
+  custosFixos: [],
 };
 
 function reducer(state, action) {
