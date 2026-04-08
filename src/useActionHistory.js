@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { collection, addDoc, query, orderBy, limit, getDocs, startAfter } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, limit, getDocs, startAfter, deleteDoc, doc } from 'firebase/firestore';
 import { db } from './firebase';
 
 // Human-readable descriptions for each action type
@@ -17,6 +17,7 @@ const ACTION_DESCRIPTIONS = {
     DEL_CUSTO: () => 'Deleted a fixed cost',
     RESET_VENDAS: () => 'Cleared all sales',
     RESET_ESTOQUE: () => 'Reset all inventory',
+    RESET_ALL: () => 'Wiped out all data (Reset)',
   },
   pt: {
     ADD_VENDA: (p) => `Registrou venda: ${p.produto} — $${p.valorFinal?.toFixed(2) || '0.00'}`,
@@ -31,6 +32,7 @@ const ACTION_DESCRIPTIONS = {
     DEL_CUSTO: () => 'Excluiu um custo fixo',
     RESET_VENDAS: () => 'Limpou todas as vendas',
     RESET_ESTOQUE: () => 'Resetou todo o estoque',
+    RESET_ALL: () => 'Anotou TODA a base de dados do zero',
   },
 };
 
@@ -90,4 +92,11 @@ export async function fetchHistory(userId, limitCount = 50, afterDoc = null) {
   const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   const lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
   return { entries, lastDoc, hasMore: snapshot.docs.length === limitCount };
+}
+
+export async function clearAllHistory(userId) {
+  const historyRef = collection(db, 'users', userId, 'history');
+  const snapshot = await getDocs(historyRef);
+  const deletionPromises = snapshot.docs.map(document => deleteDoc(doc(db, 'users', userId, 'history', document.id)));
+  await Promise.all(deletionPromises);
 }

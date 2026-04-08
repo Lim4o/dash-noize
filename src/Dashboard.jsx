@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useFirestoreData } from './useFirestoreData';
-import { useActionHistory } from './useActionHistory';
+import { useActionHistory, clearAllHistory } from './useActionHistory';
 import PageHistorico from './PageHistorico';
 
 // ─── Translations ───
@@ -332,6 +332,7 @@ function reducer(state, action) {
     case 'UPDATE_ESTOQUE_QTD': return { ...state, estoque: state.estoque.map(e => e.id === action.id ? { ...e, quantidade: Math.max(0, action.quantidade) } : e) };
     case 'RESET_VENDAS': return { ...state, vendas: [] };
     case 'RESET_ESTOQUE': return { ...state, estoque: [], compras: [] };
+    case 'RESET_ALL': return { ...state, vendas: [], compras: [], estoque: [], custosFixos: [] };
     case 'LOAD_STATE': return { ...state, ...action.payload };
     default: return state;
   }
@@ -415,21 +416,78 @@ export default function Dashboard() {
   }, [state.custosFixos]);
 
   const metrics = useMemo(() => {
+    // Total numbers
     const fat = state.vendas.reduce((s, v) => s + v.valorFinal, 0);
     const custos = state.vendas.reduce((s, v) => s + v.custoUnitario + custoFixoPorUnidade, 0);
     const lucro = fat - custos;
     const margem = fat > 0 ? (lucro / fat) * 100 : 0;
+    
     const totalEstoque = state.estoque.reduce((s, e) => s + e.quantidade, 0);
     const valorEstoque = state.estoque.reduce((s, e) => s + (e.quantidade * e.custoMedio), 0);
     const ticketMedio = state.vendas.length > 0 ? fat / state.vendas.length : 0;
+    
+    // Month over Month (MoM) calculations
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const prevMonthDate = new Date(currentYear, currentMonth - 1, 1);
+    const prevMonth = prevMonthDate.getMonth();
+    const prevYear = prevMonthDate.getFullYear();
+
+    let fatAtual = 0, fatAnterior = 0;
+    let custosAtual = 0, custosAnterior = 0;
+
+    state.vendas.forEach(v => {
+      // Create a date from the string YYYY-MM-DD
+      const [y, mStr] = (v.data || '').split('-');
+      if (!y || !mStr) return;
+      
+      const vY = parseInt(y, 10);
+      const vM = parseInt(mStr, 10) - 1; // 0-indexed month
+      
+      if (vM === currentMonth && vY === currentYear) {
+        fatAtual += v.valorFinal;
+        custosAtual += v.custoUnitario + custoFixoPorUnidade;
+      } else if (vM === prevMonth && vY === prevYear) {
+        fatAnterior += v.valorFinal;
+        custosAnterior += v.custoUnitario + custoFixoPorUnidade;
+      }
+    });
+
+    const lucroAtual = fatAtual - custosAtual;
+    const margemAtual = fatAtual > 0 ? (lucroAtual / fatAtual) * 100 : 0;
+    const lucroAnterior = fatAnterior - custosAnterior;
+    const margemAnterior = fatAnterior > 0 ? (lucroAnterior / fatAnterior) * 100 : 0;
+
+    const calcChange = (atual, ant) => {
+      if (ant === 0) {
+        if (atual > 0) return { val: 100, type: 'positive', hasData: true };
+        if (atual < 0) return { val: -100, type: 'negative', hasData: true };
+        return { val: 0, type: 'neutral', hasData: false }; // no previous and no current
+      }
+      const pct = ((atual - ant) / Math.abs(ant)) * 100;
+      return { val: pct, type: pct > 0 ? 'positive' : pct < 0 ? 'negative' : 'neutral', hasData: true };
+    };
+
+    const fatChange = calcChange(fatAtual, fatAnterior);
+    const lucroChange = calcChange(lucroAtual, lucroAnterior);
+    const margemChange = {
+      val: margemAtual - margemAnterior,
+      type: (margemAtual - margemAnterior) > 0 ? 'positive' : (margemAtual - margemAnterior) < 0 ? 'negative' : 'neutral',
+      hasData: fatAnterior > 0 || fatAtual > 0
+    };
+
     const canalCount = {};
     state.vendas.forEach(v => { canalCount[v.canal] = (canalCount[v.canal] || 0) + 1; });
     const melhorCanal = Object.entries(canalCount).sort((a, b) => b[1] - a[1])[0];
+    
     const prodLucro = {};
     state.vendas.forEach(v => { prodLucro[v.produto] = (prodLucro[v.produto] || 0) + (v.valorFinal - v.custoUnitario - custoFixoPorUnidade); });
     const melhorProduto = Object.entries(prodLucro).sort((a, b) => b[1] - a[1])[0];
+    
     const melhorVenda = [...state.vendas].sort((a, b) => b.valorFinal - a.valorFinal)[0];
-    return { fat, lucro, margem, totalEstoque, valorEstoque, ticketMedio, melhorCanal, melhorProduto, melhorVenda };
+    
+    return { fat, lucro, margem, totalEstoque, valorEstoque, ticketMedio, melhorCanal, melhorProduto, melhorVenda, fatChange, lucroChange, margemChange };
   }, [state.vendas, state.estoque, custoFixoPorUnidade]);
 
   const chartDataVendas = useMemo(() => {
@@ -516,7 +574,7 @@ export default function Dashboard() {
             {page === 'custos' && <PageCustos state={state} dispatch={dispatch} setModal={setModal} />}
             {page === 'margens' && <PageMargens state={state} custoFixoPorUnidade={custoFixoPorUnidade} />}
             {page === 'historico' && <PageHistorico t={t} />}
-            {page === 'config' && <PageConfig dispatch={dispatch} />}
+            {page === 'config' && <PageConfig dispatch={dispatch} user={user} />}
           </div>
         </div>
       </div>
@@ -534,6 +592,18 @@ export default function Dashboard() {
 // ──────────────────────────────────────────────────────────────────────────
 // PAGE: DASHBOARD
 // ──────────────────────────────────────────────────────────────────────────
+function TrendIndicator({ metric, isMargin = false, t }) {
+  if (!metric || !metric.hasData) return null;
+  const icon = metric.type === 'positive' ? <ArrowUpRight size={14}/> : metric.type === 'negative' ? <ArrowDownRight size={14}/> : null;
+  const sign = metric.val > 0 ? '+' : '';
+  const suffix = isMargin ? 'pp' : `% ${t('vs_prev_month')}`;
+  return (
+    <span className={`metric-change ${metric.type}`}>
+      {icon} {sign}{metric.val.toFixed(1)}{suffix}
+    </span>
+  );
+}
+
 function PageDashboard({ metrics, state, dispatch, setModal, chartDataVendas, chartDataPagamento, custoFixoPorUnidade }) {
   const { t } = useI18n();
 
@@ -560,7 +630,7 @@ function PageDashboard({ metrics, state, dispatch, setModal, chartDataVendas, ch
             <div className="metric-icon" style={{background:'rgba(124,58,237,0.15)'}}><TrendingUp size={16} color="#7c3aed"/></div>
           </div>
           <span className="metric-value">{fmt(metrics.fat)}</span>
-          <span className="metric-change positive"><ArrowUpRight size={14}/> +12.5% {t('vs_prev_month')}</span>
+          <TrendIndicator metric={metrics.fatChange} t={t} />
         </div>
         <div className="card card-highlight metric-card">
           <div className="metric-header">
@@ -568,7 +638,7 @@ function PageDashboard({ metrics, state, dispatch, setModal, chartDataVendas, ch
             <div className="metric-icon" style={{background:'rgba(249,115,22,0.15)'}}><DollarSign size={16} color="#f97316"/></div>
           </div>
           <span className="metric-value" style={{color:'#f97316'}}>{fmt(metrics.lucro)}</span>
-          <span className="metric-change positive"><ArrowUpRight size={14}/> +8.3% {t('vs_prev_month')}</span>
+          <TrendIndicator metric={metrics.lucroChange} t={t} />
         </div>
         <div className="card metric-card">
           <div className="metric-header">
@@ -576,7 +646,7 @@ function PageDashboard({ metrics, state, dispatch, setModal, chartDataVendas, ch
             {metrics.margem < 10 && <span className="badge badge-warning">{t('attention')}</span>}
           </div>
           <span className="metric-value">{fmtPct(metrics.margem)}</span>
-          <span className="metric-change positive"><ArrowUpRight size={14}/> +2.1pp</span>
+          <TrendIndicator metric={metrics.margemChange} isMargin={true} t={t} />
         </div>
         <div className="card metric-card">
           <div className="metric-header">
@@ -1066,14 +1136,15 @@ function TableMargemCliente({ vendas, cpfu }) {
 // ──────────────────────────────────────────────────────────────────────────
 // PAGE: CONFIGURAÇÕES
 // ──────────────────────────────────────────────────────────────────────────
-function PageConfig({ dispatch }) {
+function PageConfig({ dispatch, user }) {
   const { t, lang, setLang } = useI18n();
+  const { updateUserAuthProfile } = useAuth();
   const [tab, setTab] = useState('perfil');
   const [saved, setSaved] = useState(false);
 
   // Perfil
-  const [nomeUsuario, setNomeUsuario] = useState('Limão');
-  const [email, setEmail] = useState('limao@noize.com');
+  const [nomeUsuario, setNomeUsuario] = useState(user?.displayName || 'Usuário');
+  const [email, setEmail] = useState(user?.email || 'email@exemplo.com');
   const [nomeLoja, setNomeLoja] = useState('Noize Store');
   const [notifEmail, setNotifEmail] = useState(false);
   const [notifEstoque, setNotifEstoque] = useState(true);
@@ -1100,7 +1171,18 @@ function PageConfig({ dispatch }) {
   const togglePayment = (key) => setPayments(p => ({ ...p, [key]: !p[key] }));
   const toggleChannel = (key) => setChannels(c => ({ ...c, [key]: !c[key] }));
 
-  const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
+  const handleSave = async () => {
+    try {
+      if (updateUserAuthProfile && nomeUsuario && nomeUsuario !== user?.displayName) {
+        await updateUserAuthProfile(nomeUsuario);
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      console.error("Erro ao salvar", e);
+      alert("Ocorreu um erro ao atualizar o nome de usuário.");
+    }
+  };
 
   const CONFIG_TABS = [
     { id: 'perfil',     label: t('user_profile'),     icon: Users },
@@ -1144,7 +1226,7 @@ function PageConfig({ dispatch }) {
             </div>
             <div className="form-row">
               <div className="form-group"><label>{t('name')}</label><input className="form-input" value={nomeUsuario} onChange={e=>setNomeUsuario(e.target.value)}/></div>
-              <div className="form-group"><label>E-mail</label><input className="form-input" value={email} onChange={e=>setEmail(e.target.value)}/></div>
+              <div className="form-group"><label>E-mail</label><input className="form-input" value={email} disabled style={{opacity: 0.6, cursor: 'not-allowed'}}/></div>
             </div>
             <div className="form-group" style={{marginTop:12}}>
               <label>{t('store_name')}</label>
@@ -1181,8 +1263,9 @@ function PageConfig({ dispatch }) {
             </div>
             <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:14,lineHeight:1.5}}>{t('danger_zone_desc')}</p>
             <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-              <button className="btn btn-danger btn-sm"><Trash2 size={13}/> {t('clear_sales')}</button>
-              <button className="btn btn-danger btn-sm"><Trash2 size={13}/> {t('reset_inventory')}</button>
+              <button className="btn btn-danger btn-sm" onClick={() => { if(confirm('Tem certeza que deseja apagar todas as vendas?')) dispatch({type: 'RESET_VENDAS'}) }}><Trash2 size={13}/> {t('clear_sales')}</button>
+              <button className="btn btn-danger btn-sm" onClick={() => { if(confirm('Tem certeza que deseja zerar o estoque e compras?')) dispatch({type: 'RESET_ESTOQUE'}) }}><Trash2 size={13}/> {t('reset_inventory')}</button>
+              <button className="btn btn-danger btn-sm" onClick={async () => { if(confirm('Tem certeza que deseja apagar TODOS os dados (Vendas, Compras, Estoque e Custos) incluindo o histórico?')) { dispatch({type: 'RESET_ALL'}); if (user) { await clearAllHistory(user.uid); alert('Banco de dados e histórico limpos com sucesso!'); } } }}><Trash2 size={13}/> Apagar Tudo</button>
             </div>
           </div>
         </>}

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
+import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, updateProfile } from 'firebase/auth';
 import { auth, googleProvider } from './firebase';
 
 const AuthContext = createContext();
@@ -35,8 +35,15 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const updateUserAuthProfile = async (displayName) => {
+    if (auth.currentUser) {
+      await updateProfile(auth.currentUser, { displayName });
+      setUser({ ...auth.currentUser, displayName });
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut, updateUserAuthProfile }}>
       {children}
     </AuthContext.Provider>
   );

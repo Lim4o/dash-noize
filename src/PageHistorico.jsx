@@ -20,7 +20,7 @@ const ACTION_ICON = {
   ADD_COMPRA: Plus, DEL_COMPRA: Trash2, UPDATE_COMPRA_STATUS: Edit3,
   ADD_ESTOQUE: Plus, DEL_ESTOQUE: Trash2, UPDATE_ESTOQUE_QTD: Edit3,
   ADD_CUSTO: Plus, DEL_CUSTO: Trash2,
-  RESET_VENDAS: Trash2, RESET_ESTOQUE: Trash2,
+  RESET_VENDAS: Trash2, RESET_ESTOQUE: Trash2, RESET_ALL: Trash2,
 };
 
 function formatTimestamp(ts) {
