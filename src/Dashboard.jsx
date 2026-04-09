@@ -316,6 +316,8 @@ const initialState = {
   compras: [],
   estoque: [],
   custosFixos: [],
+  clientes: [],
+  fornecedores: [],
 };
 
 function reducer(state, action) {
@@ -332,7 +334,11 @@ function reducer(state, action) {
     case 'UPDATE_ESTOQUE_QTD': return { ...state, estoque: state.estoque.map(e => e.id === action.id ? { ...e, quantidade: Math.max(0, action.quantidade) } : e) };
     case 'RESET_VENDAS': return { ...state, vendas: [] };
     case 'RESET_ESTOQUE': return { ...state, estoque: [], compras: [] };
-    case 'RESET_ALL': return { ...state, vendas: [], compras: [], estoque: [], custosFixos: [] };
+    case 'RESET_ALL': return { ...state, vendas: [], compras: [], estoque: [], custosFixos: [], clientes: [], fornecedores: [] };
+    case 'ADD_CLIENTE': return { ...state, clientes: [...(state.clientes||[]), { ...action.payload, id: Date.now() }] };
+    case 'DEL_CLIENTE': return { ...state, clientes: (state.clientes||[]).filter(c => c.id !== action.id) };
+    case 'ADD_FORNECEDOR': return { ...state, fornecedores: [...(state.fornecedores||[]), { ...action.payload, id: Date.now() }] };
+    case 'DEL_FORNECEDOR': return { ...state, fornecedores: (state.fornecedores||[]).filter(f => f.id !== action.id) };
     case 'LOAD_STATE': return { ...state, ...action.payload };
     default: return state;
   }
@@ -513,6 +519,7 @@ export default function Dashboard() {
     { id: 'custos', label: t('fixed_costs'), icon: Landmark },
     { id: 'margens', label: t('margins_profit'), icon: TrendingUp },
     { id: 'historico', label: t('history'), icon: Clock },
+    { id: 'cadastros', label: lang === 'pt' ? 'Cadastros' : 'Contacts', icon: Users },
   ];
 
   return (
@@ -574,6 +581,7 @@ export default function Dashboard() {
             {page === 'custos' && <PageCustos state={state} dispatch={dispatch} setModal={setModal} />}
             {page === 'margens' && <PageMargens state={state} custoFixoPorUnidade={custoFixoPorUnidade} />}
             {page === 'historico' && <PageHistorico t={t} />}
+            {page === 'cadastros' && <PageCadastros state={state} dispatch={dispatch} setModal={setModal} />}
             {page === 'config' && <PageConfig dispatch={dispatch} user={user} />}
           </div>
         </div>
@@ -581,9 +589,12 @@ export default function Dashboard() {
 
       {/* Modals */}
       {modal === 'venda' && <ModalVenda state={state} dispatch={dispatch} user={user} onClose={() => setModal(null)} />}
-      {modal === 'compra' && <ModalCompra dispatch={dispatch} onClose={() => setModal(null)} />}
+      {modal === 'compra' && <ModalCompra state={state} dispatch={dispatch} onClose={() => setModal(null)} />}
       {modal === 'custo' && <ModalCusto dispatch={dispatch} onClose={() => setModal(null)} />}
       {modal === 'estoque' && <ModalEstoque dispatch={dispatch} onClose={() => setModal(null)} />}
+      {(modal === 'cadastro-cliente' || modal === 'cadastro-fornecedor') && (
+        <ModalCadastro tipoInicial={modal === 'cadastro-fornecedor' ? 'fornecedor' : 'cliente'} dispatch={dispatch} onClose={() => setModal(null)} />
+      )}
     </div>
     </I18nContext.Provider>
   );
@@ -1415,7 +1426,10 @@ function ModalVenda({ state, dispatch, user, onClose }) {
       ) : (
         <div className="form-group"><label>{t('product')}</label><input className="form-input" placeholder={t('product_name')} value={form.produto} onChange={e=>u('produto',e.target.value)}/></div>
       )}
-      <div className="form-group"><label>{t('customer_optional')}</label><input className="form-input" placeholder={t('name')} value={form.cliente} onChange={e=>u('cliente',e.target.value)}/></div>
+      <div className="form-group"><label>{t('customer_optional')}</label>
+        <input className="form-input" list="clientes-list" placeholder={t('name')} value={form.cliente} onChange={e=>u('cliente',e.target.value)}/>
+        <datalist id="clientes-list">{(state.clientes||[]).map(c => <option key={c.id} value={c.nome}/>)}</datalist>
+      </div>
       <div className="form-row">
         <div className="form-group"><label>{t('channel')}</label><select className="form-select" value={form.canal} onChange={e=>u('canal',e.target.value)}>{CHANNELS.map(c=><option key={c}>{c}</option>)}</select></div>
         <div className="form-group"><label>{t('payment')}</label><select className="form-select" value={form.pagamento} onChange={e=>u('pagamento',e.target.value)}>{PAYMENTS.map(p=><option key={p}>{p}</option>)}</select></div>
@@ -1431,7 +1445,7 @@ function ModalVenda({ state, dispatch, user, onClose }) {
   );
 }
 
-function ModalCompra({ dispatch, onClose }) {
+function ModalCompra({ state, dispatch, onClose }) {
   const { t } = useI18n();
   const [form, setForm] = useState({ fornecedor:'', origem:'China', dataPedido: new Date().toISOString().slice(0,10), status:'Comprado', modoEnvio:'Remessa Conforme', frete:'0', taxaRemessa:'0' });
   const [itens, setItens] = useState([{ nome:'', tamanho:'M', quantidade:'1', custoYuan:'0', custoReal:'' }]);
@@ -1449,7 +1463,10 @@ function ModalCompra({ dispatch, onClose }) {
   return (
     <Modal title={t('new_purchase')} onClose={onClose} footer={<><button className="btn btn-ghost" onClick={onClose}>{t('cancel')}</button><button className="btn btn-primary" onClick={save}>{t('new_purchase')}</button></>}>
       <div className="form-row">
-        <div className="form-group"><label>{t('supplier')}</label><input className="form-input" placeholder={t('name')} value={form.fornecedor} onChange={e=>u('fornecedor',e.target.value)}/></div>
+        <div className="form-group"><label>{t('supplier')}</label>
+          <input className="form-input" list="fornecedores-list" placeholder={t('name')} value={form.fornecedor} onChange={e=>u('fornecedor',e.target.value)}/>
+          <datalist id="fornecedores-list">{(state?.fornecedores||[]).map(f => <option key={f.id} value={f.nome}/>)}</datalist>
+        </div>
         <div className="form-group"><label>{t('origin')}</label><select className="form-select" value={form.origem} onChange={e=>u('origem',e.target.value)}><option>China</option><option>Domestic</option></select></div>
       </div>
       <div className="form-row">
@@ -1526,6 +1543,117 @@ function ModalEstoque({ dispatch, onClose }) {
       </div>
       <div className="form-group"><label>{t('avg_cost')} $</label><input className="form-input" type="number" step="0.01" value={form.custoMedio} onChange={e=>u('custoMedio',e.target.value)}/></div>
       <div className="preview-box">{t('total_value')}: <strong>{fmt(totalValue)}</strong></div>
+    </Modal>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// PAGE: CADASTROS (Clientes e Fornecedores)
+// ──────────────────────────────────────────────────────────────────────────
+function PageCadastros({ state, dispatch, setModal }) {
+  const { t, lang } = useI18n();
+  const [tab, setTab] = useState('cliente');
+  const lista = tab === 'cliente' ? (state.clientes || []) : (state.fornecedores || []);
+  const isCli = tab === 'cliente';
+  const labels = lang === 'pt'
+    ? { cli: 'Clientes', forn: 'Fornecedores', novoCli: 'Novo Cliente', novoForn: 'Novo Fornecedor', nome: 'Nome', email: 'Email', tel: 'Telefone', doc: 'CPF/CNPJ', obs: 'Observações', vazio: 'Nenhum cadastro ainda', acoes: 'Ações' }
+    : { cli: 'Customers', forn: 'Suppliers', novoCli: 'New Customer', novoForn: 'New Supplier', nome: 'Name', email: 'Email', tel: 'Phone', doc: 'Tax ID', obs: 'Notes', vazio: 'No records yet', acoes: 'Actions' };
+  return (
+    <div>
+      <div className="tabs" style={{display:'flex',gap:8,marginBottom:16}}>
+        <button className={`btn ${isCli?'btn-primary':'btn-ghost'} btn-sm`} onClick={()=>setTab('cliente')}>{labels.cli}</button>
+        <button className={`btn ${!isCli?'btn-primary':'btn-ghost'} btn-sm`} onClick={()=>setTab('fornecedor')}>{labels.forn}</button>
+        <div style={{flex:1}}/>
+        <button className="btn btn-primary btn-sm" onClick={()=>setModal(isCli ? 'cadastro-cliente' : 'cadastro-fornecedor')}>
+          <Plus size={14}/> {isCli ? labels.novoCli : labels.novoForn}
+        </button>
+      </div>
+      {lista.length === 0 ? (
+        <EmptyState
+          title={labels.vazio}
+          desc={isCli ? labels.novoCli : labels.novoForn}
+          action={isCli ? labels.novoCli : labels.novoForn}
+          onAction={()=>setModal(isCli ? 'cadastro-cliente' : 'cadastro-fornecedor')}
+        />
+      ) : (
+        <div className="card">
+          <table>
+            <thead><tr><th>{labels.nome}</th><th>{labels.email}</th><th>{labels.tel}</th><th>{labels.doc}</th><th>{labels.obs}</th><th>{labels.acoes}</th></tr></thead>
+            <tbody>
+              {lista.map(item => (
+                <tr key={item.id}>
+                  <td>{item.nome}</td>
+                  <td>{item.email || '—'}</td>
+                  <td>{item.telefone || '—'}</td>
+                  <td>{item.documento || '—'}</td>
+                  <td>{item.obs || '—'}</td>
+                  <td>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => dispatch({ type: isCli ? 'DEL_CLIENTE' : 'DEL_FORNECEDOR', id: item.id })}
+                    ><Trash2 size={13}/></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// MODAL: CADASTRO (Cliente / Fornecedor)
+// ──────────────────────────────────────────────────────────────────────────
+function ModalCadastro({ tipoInicial = 'cliente', dispatch, onClose }) {
+  const { lang } = useI18n();
+  const [tipo, setTipo] = useState(tipoInicial);
+  const [form, setForm] = useState({ nome:'', email:'', telefone:'', documento:'', obs:'' });
+  const u = (k,v) => setForm(p => ({ ...p, [k]: v }));
+  const labels = lang === 'pt'
+    ? { titulo: 'Novo Cadastro', cli: 'Cliente', forn: 'Fornecedor', nome: 'Nome', email: 'Email', tel: 'Telefone', doc: 'CPF/CNPJ', obs: 'Observações', salvar: 'Salvar', cancelar: 'Cancelar' }
+    : { titulo: 'New Contact', cli: 'Customer', forn: 'Supplier', nome: 'Name', email: 'Email', tel: 'Phone', doc: 'Tax ID', obs: 'Notes', salvar: 'Save', cancelar: 'Cancel' };
+  const save = () => {
+    if (!form.nome.trim()) return;
+    dispatch({
+      type: tipo === 'cliente' ? 'ADD_CLIENTE' : 'ADD_FORNECEDOR',
+      payload: { ...form, nome: form.nome.trim(), criadoEm: new Date().toISOString() },
+    });
+    onClose();
+  };
+  return (
+    <Modal
+      title={labels.titulo}
+      onClose={onClose}
+      footer={<>
+        <button className="btn btn-ghost" onClick={onClose}>{labels.cancelar}</button>
+        <button className="btn btn-primary" onClick={save}>{labels.salvar}</button>
+      </>}
+    >
+      <div className="form-group">
+        <div className="radio-group">
+          <div className={`radio-option ${tipo==='cliente'?'active':''}`} onClick={()=>setTipo('cliente')}>{labels.cli}</div>
+          <div className={`radio-option ${tipo==='fornecedor'?'active':''}`} onClick={()=>setTipo('fornecedor')}>{labels.forn}</div>
+        </div>
+      </div>
+      <div className="form-group"><label>{labels.nome}</label>
+        <input className="form-input" value={form.nome} onChange={e=>u('nome',e.target.value)} autoFocus/>
+      </div>
+      <div className="form-row">
+        <div className="form-group"><label>{labels.email}</label>
+          <input className="form-input" type="email" value={form.email} onChange={e=>u('email',e.target.value)}/>
+        </div>
+        <div className="form-group"><label>{labels.tel}</label>
+          <input className="form-input" value={form.telefone} onChange={e=>u('telefone',e.target.value)}/>
+        </div>
+      </div>
+      <div className="form-group"><label>{labels.doc}</label>
+        <input className="form-input" value={form.documento} onChange={e=>u('documento',e.target.value)}/>
+      </div>
+      <div className="form-group"><label>{labels.obs}</label>
+        <textarea className="form-textarea" value={form.obs} onChange={e=>u('obs',e.target.value)}/>
+      </div>
     </Modal>
   );
 }

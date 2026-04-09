@@ -54,6 +54,8 @@ export function useFirestoreData(user, state, dispatch) {
           compras: state.compras,
           estoque: state.estoque,
           custosFixos: state.custosFixos,
+          clientes: state.clientes || [],
+          fornecedores: state.fornecedores || [],
           updatedAt: new Date().toISOString(),
         });
       } catch (error) {

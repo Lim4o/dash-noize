@@ -18,6 +18,10 @@ const ACTION_DESCRIPTIONS = {
     RESET_VENDAS: () => 'Cleared all sales',
     RESET_ESTOQUE: () => 'Reset all inventory',
     RESET_ALL: () => 'Wiped out all data (Reset)',
+    ADD_CLIENTE: (p) => `Added customer: ${p.nome}`,
+    DEL_CLIENTE: () => 'Deleted a customer',
+    ADD_FORNECEDOR: (p) => `Added supplier: ${p.nome}`,
+    DEL_FORNECEDOR: () => 'Deleted a supplier',
   },
   pt: {
     ADD_VENDA: (p) => `Registrou venda: ${p.produto} — $${p.valorFinal?.toFixed(2) || '0.00'}`,
@@ -33,6 +37,10 @@ const ACTION_DESCRIPTIONS = {
     RESET_VENDAS: () => 'Limpou todas as vendas',
     RESET_ESTOQUE: () => 'Resetou todo o estoque',
     RESET_ALL: () => 'Anotou TODA a base de dados do zero',
+    ADD_CLIENTE: (p) => `Cadastrou cliente: ${p.nome}`,
+    DEL_CLIENTE: () => 'Excluiu um cliente',
+    ADD_FORNECEDOR: (p) => `Cadastrou fornecedor: ${p.nome}`,
+    DEL_FORNECEDOR: () => 'Excluiu um fornecedor',
   },
 };
 
@@ -42,6 +50,8 @@ const ACTION_CATEGORIES = {
   ADD_ESTOQUE: 'estoque', DEL_ESTOQUE: 'estoque', UPDATE_ESTOQUE_QTD: 'estoque',
   ADD_CUSTO: 'custos', DEL_CUSTO: 'custos',
   RESET_ESTOQUE: 'estoque',
+  ADD_CLIENTE: 'cadastros', DEL_CLIENTE: 'cadastros',
+  ADD_FORNECEDOR: 'cadastros', DEL_FORNECEDOR: 'cadastros',
 };
 
 // Actions that should NOT be logged
