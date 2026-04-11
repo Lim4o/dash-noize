@@ -81,6 +81,7 @@ export function useActionHistory(user, dispatch, lang = 'pt') {
       category,
       timestamp: new Date().toISOString(),
       details: action.payload ? JSON.parse(JSON.stringify(action.payload)) : null,
+      userName: user.displayName || user.email || 'Usuário',
     }).catch(err => console.error('Error logging action:', err));
   }, [user, dispatch, lang]);
 

@@ -132,7 +132,7 @@ export default function PageHistorico({ t }) {
                   <div className="history-content">
                     <div className="history-header">
                       <span className="badge" style={{ background: catCfg.bg, color: catCfg.color, fontSize: 10 }}>
-                        {catCfg.label}
+                        {entry.userName || 'Usuário'}
                       </span>
                       <span className="history-time">{formatTimestamp(entry.timestamp)}</span>
                     </div>
