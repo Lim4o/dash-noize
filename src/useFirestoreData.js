@@ -23,7 +23,7 @@ export function useFirestoreData(user, state, dispatch) {
 
     const loadData = async () => {
       try {
-        const docRef = doc(db, 'users', user.uid, 'appData', 'financial');
+        const docRef = doc(db, 'shared', 'financial');
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
@@ -48,7 +48,7 @@ export function useFirestoreData(user, state, dispatch) {
 
     saveTimerRef.current = setTimeout(async () => {
       try {
-        const docRef = doc(db, 'users', user.uid, 'appData', 'financial');
+        const docRef = doc(db, 'shared', 'financial');
         await setDoc(docRef, {
           vendas: state.vendas,
           compras: state.compras,

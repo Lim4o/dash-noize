@@ -74,7 +74,7 @@ export function useActionHistory(user, dispatch, lang = 'pt') {
     const category = ACTION_CATEGORIES[action.type] || 'other';
 
     // Log to Firestore (fire-and-forget)
-    const historyRef = collection(db, 'users', user.uid, 'history');
+    const historyRef = collection(db, 'shared', 'history');
     addDoc(historyRef, {
       action: action.type,
       description,
@@ -91,8 +91,8 @@ export function useActionHistory(user, dispatch, lang = 'pt') {
 /**
  * Fetch history entries from Firestore with pagination
  */
-export async function fetchHistory(userId, limitCount = 50, afterDoc = null) {
-  const historyRef = collection(db, 'users', userId, 'history');
+export async function fetchHistory(limitCount = 50, afterDoc = null) {
+  const historyRef = collection(db, 'shared', 'history');
   let q;
   if (afterDoc) {
     q = query(historyRef, orderBy('timestamp', 'desc'), startAfter(afterDoc), limit(limitCount));
@@ -105,9 +105,9 @@ export async function fetchHistory(userId, limitCount = 50, afterDoc = null) {
   return { entries, lastDoc, hasMore: snapshot.docs.length === limitCount };
 }
 
-export async function clearAllHistory(userId) {
-  const historyRef = collection(db, 'users', userId, 'history');
+export async function clearAllHistory() {
+  const historyRef = collection(db, 'shared', 'history');
   const snapshot = await getDocs(historyRef);
-  const deletionPromises = snapshot.docs.map(document => deleteDoc(doc(db, 'users', userId, 'history', document.id)));
+  const deletionPromises = snapshot.docs.map(document => deleteDoc(doc(db, 'shared', 'history', document.id)));
   await Promise.all(deletionPromises);
 }

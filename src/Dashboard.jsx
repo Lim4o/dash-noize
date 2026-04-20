@@ -1276,7 +1276,7 @@ function PageConfig({ dispatch, user }) {
             <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
               <button className="btn btn-danger btn-sm" onClick={() => { if(confirm('Tem certeza que deseja apagar todas as vendas?')) dispatch({type: 'RESET_VENDAS'}) }}><Trash2 size={13}/> {t('clear_sales')}</button>
               <button className="btn btn-danger btn-sm" onClick={() => { if(confirm('Tem certeza que deseja zerar o estoque e compras?')) dispatch({type: 'RESET_ESTOQUE'}) }}><Trash2 size={13}/> {t('reset_inventory')}</button>
-              <button className="btn btn-danger btn-sm" onClick={async () => { if(confirm('Tem certeza que deseja apagar TODOS os dados (Vendas, Compras, Estoque e Custos) incluindo o histórico?')) { dispatch({type: 'RESET_ALL'}); if (user) { await clearAllHistory(user.uid); alert('Banco de dados e histórico limpos com sucesso!'); } } }}><Trash2 size={13}/> Apagar Tudo</button>
+              <button className="btn btn-danger btn-sm" onClick={async () => { if(confirm('Tem certeza que deseja apagar TODOS os dados (Vendas, Compras, Estoque e Custos) incluindo o histórico?')) { dispatch({type: 'RESET_ALL'}); if (user) { await clearAllHistory(); alert('Banco de dados e histórico limpos com sucesso!'); } } }}><Trash2 size={13}/> Apagar Tudo</button>
             </div>
           </div>
         </>}

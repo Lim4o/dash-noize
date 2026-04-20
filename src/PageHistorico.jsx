@@ -56,7 +56,7 @@ export default function PageHistorico({ t }) {
       setLoadingMore(true);
     }
     try {
-      const result = await fetchHistory(user.uid, 50, reset ? null : lastDoc);
+      const result = await fetchHistory(50, reset ? null : lastDoc);
       setEntries(prev => reset ? result.entries : [...prev, ...result.entries]);
       setLastDoc(result.lastDoc);
       setHasMore(result.hasMore);
