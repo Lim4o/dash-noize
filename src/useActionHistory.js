@@ -74,7 +74,7 @@ export function useActionHistory(user, dispatch, lang = 'pt') {
     const category = ACTION_CATEGORIES[action.type] || 'other';
 
     // Log to Firestore (fire-and-forget)
-    const historyRef = collection(db, 'shared', 'history');
+    const historyRef = collection(db, 'history');
     addDoc(historyRef, {
       action: action.type,
       description,
@@ -92,7 +92,7 @@ export function useActionHistory(user, dispatch, lang = 'pt') {
  * Fetch history entries from Firestore with pagination
  */
 export async function fetchHistory(limitCount = 50, afterDoc = null) {
-  const historyRef = collection(db, 'shared', 'history');
+  const historyRef = collection(db, 'history');
   let q;
   if (afterDoc) {
     q = query(historyRef, orderBy('timestamp', 'desc'), startAfter(afterDoc), limit(limitCount));
@@ -106,8 +106,8 @@ export async function fetchHistory(limitCount = 50, afterDoc = null) {
 }
 
 export async function clearAllHistory() {
-  const historyRef = collection(db, 'shared', 'history');
+  const historyRef = collection(db, 'history');
   const snapshot = await getDocs(historyRef);
-  const deletionPromises = snapshot.docs.map(document => deleteDoc(doc(db, 'shared', 'history', document.id)));
+  const deletionPromises = snapshot.docs.map(document => deleteDoc(doc(db, 'history', document.id)));
   await Promise.all(deletionPromises);
 }

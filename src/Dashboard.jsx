@@ -15,6 +15,7 @@ import { useAuth } from './AuthContext';
 import { useFirestoreData } from './useFirestoreData';
 import { useActionHistory, clearAllHistory } from './useActionHistory';
 import PageHistorico from './PageHistorico';
+import { reducer, initialState } from './reducer';
 
 // ─── Translations ───
 const DICT = {
@@ -126,7 +127,7 @@ const DICT = {
     no_purchases: 'No purchases recorded.',
     record_purchase: 'Record an order to track inventory.',
     stock_empty: 'Inventory is empty.',
-    add_purchase_prompt: 'Add a purchase to automatically feed inventory.',
+    add_purchase_prompt: "Mark a purchase as 'Arrived' to feed inventory.",
     no_fixed_costs: 'No fixed costs.',
     add_cost_prompt: 'Add packaging and branding costs to calculate CPPU.',
     margin_customer: 'Margin per Customer',
@@ -265,7 +266,7 @@ const DICT = {
     no_purchases: 'Nenhuma compra registrada.',
     record_purchase: 'Registre um pedido para ver o estoque.',
     stock_empty: 'Estoque vazio.',
-    add_purchase_prompt: 'Adicione uma compra para alimentar o estoque.',
+    add_purchase_prompt: "Marque uma compra como 'Chegou' para alimentar o estoque.",
     no_fixed_costs: 'Nenhum custo fixo.',
     add_cost_prompt: 'Adicione custos de embalagem para o CFPU.',
     margin_customer: 'Margem por Cliente',
@@ -310,39 +311,6 @@ const fmtDate = (d) => new Date(d).toLocaleDateString('en-US');
 const CHANNELS = ['Amazon', 'Marketplace', 'Instagram', 'TikTok Shop', 'Website'];
 const PAYMENTS = ['Credit Card', 'PayPal', 'Venmo', 'Cash', 'Zelle', 'Apple Pay'];
 const STATUSES_COMPRA = ['Comprado', 'A Caminho', 'Chegou'];
-
-const initialState = {
-  vendas: [],
-  compras: [],
-  estoque: [],
-  custosFixos: [],
-  clientes: [],
-  fornecedores: [],
-};
-
-function reducer(state, action) {
-  switch (action.type) {
-    case 'ADD_VENDA': return { ...state, vendas: [...state.vendas, { ...action.payload, id: Date.now() }] };
-    case 'ADD_COMPRA': return { ...state, compras: [...state.compras, { ...action.payload, id: Date.now() }] };
-    case 'ADD_CUSTO': return { ...state, custosFixos: [...state.custosFixos, { ...action.payload, id: Date.now() }] };
-    case 'DEL_VENDA': return { ...state, vendas: state.vendas.filter(v => v.id !== action.id) };
-    case 'DEL_COMPRA': return { ...state, compras: state.compras.filter(c => c.id !== action.id) };
-    case 'DEL_CUSTO': return { ...state, custosFixos: state.custosFixos.filter(c => c.id !== action.id) };
-    case 'UPDATE_COMPRA_STATUS': return { ...state, compras: state.compras.map(c => c.id === action.id ? { ...c, status: action.status } : c) };
-    case 'ADD_ESTOQUE': return { ...state, estoque: [...state.estoque, { ...action.payload, id: Date.now() }] };
-    case 'DEL_ESTOQUE': return { ...state, estoque: state.estoque.filter(e => e.id !== action.id) };
-    case 'UPDATE_ESTOQUE_QTD': return { ...state, estoque: state.estoque.map(e => e.id === action.id ? { ...e, quantidade: Math.max(0, action.quantidade) } : e) };
-    case 'RESET_VENDAS': return { ...state, vendas: [] };
-    case 'RESET_ESTOQUE': return { ...state, estoque: [], compras: [] };
-    case 'RESET_ALL': return { ...state, vendas: [], compras: [], estoque: [], custosFixos: [], clientes: [], fornecedores: [] };
-    case 'ADD_CLIENTE': return { ...state, clientes: [...(state.clientes||[]), { ...action.payload, id: Date.now() }] };
-    case 'DEL_CLIENTE': return { ...state, clientes: (state.clientes||[]).filter(c => c.id !== action.id) };
-    case 'ADD_FORNECEDOR': return { ...state, fornecedores: [...(state.fornecedores||[]), { ...action.payload, id: Date.now() }] };
-    case 'DEL_FORNECEDOR': return { ...state, fornecedores: (state.fornecedores||[]).filter(f => f.id !== action.id) };
-    case 'LOAD_STATE': return { ...state, ...action.payload };
-    default: return state;
-  }
-}
 
 // â”€â”€â”€ Chart tooltip â”€â”€â”€
 const ChartTooltip = ({ active, payload, label }) => {
@@ -1404,25 +1372,36 @@ function Toggle({ defaultOn = false }) {
 function ModalVenda({ state, dispatch, user, onClose }) {
   const { t } = useI18n();
   const [tipo, setTipo] = useState('estoque');
-  const [form, setForm] = useState({ produto:'', canal:'Amazon', pagamento:'Credit Card', valorOriginal:'', desconto:'0', cliente:'', custoUnitario:'', obs:'' });
+  const [form, setForm] = useState({ produto:'', tamanho:'', estoqueItemId:null, canal:'Amazon', pagamento:'Credit Card', valorOriginal:'', desconto:'0', cliente:'', custoUnitario:'', obs:'' });
   const u = (k,v) => setForm(p => ({...p, [k]: v}));
+  const pickEstoqueItem = (idStr) => {
+    const item = state.estoque.find(e => String(e.id) === String(idStr));
+    setForm(p => item
+      ? { ...p, estoqueItemId: item.id, produto: item.produto, tamanho: item.tamanho, custoUnitario: p.custoUnitario || String(item.custoMedio || '') }
+      : { ...p, estoqueItemId: null, produto: '', tamanho: '' });
+  };
   const valorFinal = (parseFloat(form.valorOriginal)||0) - (parseFloat(form.desconto)||0);
   const save = () => {
     if(!form.produto || !form.valorOriginal) return;
+    if(tipo === 'estoque' && form.estoqueItemId == null) return;
     const vendedorNome = user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || 'Desconhecido';
-    dispatch({ type: 'ADD_VENDA', payload: { data: new Date().toISOString().slice(0,10), produto: form.produto, canal: form.canal, pagamento: form.pagamento, valorOriginal: parseFloat(form.valorOriginal), desconto: parseFloat(form.desconto)||0, valorFinal, custoUnitario: parseFloat(form.custoUnitario)||0, cliente: form.cliente, obs: form.obs, tipo, vendedor: vendedorNome }});
+    dispatch({ type: 'ADD_VENDA', payload: { data: new Date().toISOString().slice(0,10), produto: form.produto, tamanho: form.tamanho, estoqueItemId: tipo === 'estoque' ? form.estoqueItemId : null, canal: form.canal, pagamento: form.pagamento, valorOriginal: parseFloat(form.valorOriginal), desconto: parseFloat(form.desconto)||0, valorFinal, custoUnitario: parseFloat(form.custoUnitario)||0, cliente: form.cliente, obs: form.obs, tipo, vendedor: vendedorNome }});
     onClose();
+  };
+  const switchTipo = (next) => {
+    setTipo(next);
+    setForm(p => ({ ...p, produto: '', tamanho: '', estoqueItemId: null }));
   };
   return (
     <Modal title={t('new_sale')} onClose={onClose} footer={<><button className="btn btn-ghost" onClick={onClose}>{t('cancel')}</button><button className="btn btn-primary" onClick={save}>{t('new_sale')}</button></>}>
       <div className="form-group"><label>{t('type')}</label>
         <div className="radio-group">
-          <div className={`radio-option ${tipo==='estoque'?'active':''}`} onClick={()=>setTipo('estoque')}>{t('sell_inventory')}</div>
-          <div className={`radio-option ${tipo==='encomenda'?'active':''}`} onClick={()=>setTipo('encomenda')}>{t('custom_order')}</div>
+          <div className={`radio-option ${tipo==='estoque'?'active':''}`} onClick={()=>switchTipo('estoque')}>{t('sell_inventory')}</div>
+          <div className={`radio-option ${tipo==='encomenda'?'active':''}`} onClick={()=>switchTipo('encomenda')}>{t('custom_order')}</div>
         </div>
       </div>
       {tipo === 'estoque' ? (
-        <div className="form-group"><label>{t('product')}</label><select className="form-select" value={form.produto} onChange={e=>u('produto',e.target.value)}><option value="">{t('select')}</option>{state.estoque.filter(e=>e.quantidade>0).map(e=><option key={e.id} value={e.produto}>{e.produto} ({e.tamanho}) - {e.quantidade} {t('units')}</option>)}</select></div>
+        <div className="form-group"><label>{t('product')}</label><select className="form-select" value={form.estoqueItemId ?? ''} onChange={e=>pickEstoqueItem(e.target.value)}><option value="">{t('select')}</option>{state.estoque.filter(e=>e.quantidade>0).map(e=><option key={e.id} value={e.id}>{e.produto} ({e.tamanho}) - {e.quantidade} {t('units')}</option>)}</select></div>
       ) : (
         <div className="form-group"><label>{t('product')}</label><input className="form-input" placeholder={t('product_name')} value={form.produto} onChange={e=>u('produto',e.target.value)}/></div>
       )}
