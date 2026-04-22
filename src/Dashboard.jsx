@@ -1427,15 +1427,32 @@ function ModalVenda({ state, dispatch, user, onClose }) {
 function ModalCompra({ state, dispatch, onClose }) {
   const { t } = useI18n();
   const [form, setForm] = useState({ fornecedor:'', origem:'China', dataPedido: new Date().toISOString().slice(0,10), status:'Comprado', modoEnvio:'Remessa Conforme', frete:'0', taxaRemessa:'0' });
-  const [itens, setItens] = useState([{ nome:'', tamanho:'M', quantidade:'1', custoYuan:'0', custoReal:'' }]);
+  const [itens, setItens] = useState([{ nome:'', tamanho:'', quantidade:'1', custoYuan:'0', custoReal:'' }]);
   const u = (k,v) => setForm(p => ({...p, [k]: v}));
-  const addItem = () => setItens(p => [...p, { nome:'', tamanho:'M', quantidade:'1', custoYuan:'0', custoReal:'' }]);
+  const addItem = () => setItens(p => [...p, { nome:'', tamanho:'', quantidade:'1', custoYuan:'0', custoReal:'' }]);
   const uItem = (i,k,v) => setItens(p => p.map((it,idx)=>idx===i?{...it,[k]:v}:it));
   const removeItem = (i) => setItens(p => p.filter((_,idx)=>idx!==i));
+  const uniqueProdutos = useMemo(
+    () => [...new Set((state?.estoque||[]).map(e => e.produto))].sort(),
+    [state?.estoque]
+  );
+  const sizesForProduto = (nome) =>
+    [...new Set((state?.estoque||[]).filter(e => e.produto === nome).map(e => e.tamanho))];
+  const changeNome = (i, nome) => {
+    setItens(p => p.map((it, idx) => {
+      if (idx !== i) return it;
+      const sizes = sizesForProduto(nome);
+      const tamanho = sizes.includes(it.tamanho) ? it.tamanho : (sizes[0] || it.tamanho);
+      const match = (state?.estoque||[]).find(e => e.produto === nome && e.tamanho === tamanho);
+      return { ...it, nome, tamanho, custoReal: it.custoReal || String(match?.custoMedio || '') };
+    }));
+  };
   const totalItens = itens.reduce((s,it) => s + (parseFloat(it.custoReal)||0) * (parseInt(it.quantidade)||0), 0);
   const total = totalItens + (parseFloat(form.frete)||0) + (parseFloat(form.taxaRemessa)||0);
+  const itensValid = itens.every(it => it.nome && it.tamanho && (parseInt(it.quantidade) || 0) > 0);
+  const canSave = !!form.fornecedor && itensValid;
   const save = () => {
-    if(!form.fornecedor) return;
+    if(!canSave) return;
     dispatch({ type:'ADD_COMPRA', payload: { ...form, frete:parseFloat(form.frete)||0, taxaRemessa:parseFloat(form.taxaRemessa)||0, itens: itens.map(it=>({...it, quantidade:parseInt(it.quantidade)||0, custoYuan:parseFloat(it.custoYuan)||0, custoReal:parseFloat(it.custoReal)||0})) }});
     onClose();
   };
@@ -1462,15 +1479,25 @@ function ModalCompra({ state, dispatch, onClose }) {
         <div className="form-group"><label>{t('remittance_fee')} $</label><input className="form-input" type="number" value={form.taxaRemessa} onChange={e=>u('taxaRemessa',e.target.value)}/></div>
       </div>
       <div className="section-title" style={{marginTop:8}}>{t('order_items')}</div>
-      {itens.map((it,i) => (
-        <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr auto',gap:8,alignItems:'end'}}>
-          <div className="form-group"><label style={{fontSize:10}}>{i===0 ? t('product') : ''}</label><input className="form-input" placeholder={t('product_name')} value={it.nome} onChange={e=>uItem(i,'nome',e.target.value)}/></div>
-          <div className="form-group"><label style={{fontSize:10}}>{i===0 ? t('size') : ''}</label><input className="form-input" value={it.tamanho} onChange={e=>uItem(i,'tamanho',e.target.value)}/></div>
-          <div className="form-group"><label style={{fontSize:10}}>{i===0 ? t('qty') : ''}</label><input className="form-input" type="number" value={it.quantidade} onChange={e=>uItem(i,'quantidade',e.target.value)}/></div>
-          <div className="form-group"><label style={{fontSize:10}}>{i===0 ? t('cost') : ''}</label><input className="form-input" type="number" value={it.custoReal} onChange={e=>uItem(i,'custoReal',e.target.value)}/></div>
-          <button className="btn btn-ghost btn-sm" onClick={()=>removeItem(i)} style={{marginBottom:1}}><Trash2 size={13}/></button>
-        </div>
-      ))}
+      <datalist id="compra-produtos-list">{uniqueProdutos.map(p => <option key={p} value={p}/>)}</datalist>
+      {itens.map((it,i) => {
+        const sizes = sizesForProduto(it.nome);
+        const sizeListId = `compra-sizes-${i}`;
+        return (
+          <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr auto',gap:8,alignItems:'end'}}>
+            <div className="form-group"><label style={{fontSize:10}}>{i===0 ? t('product') : ''}</label>
+              <input className="form-input" list="compra-produtos-list" placeholder={t('product_name')} value={it.nome} onChange={e=>changeNome(i, e.target.value)}/>
+            </div>
+            <div className="form-group"><label style={{fontSize:10}}>{i===0 ? t('size') : ''}</label>
+              <input className="form-input" list={sizeListId} value={it.tamanho} onChange={e=>uItem(i,'tamanho',e.target.value)}/>
+              <datalist id={sizeListId}>{sizes.map(s => <option key={s} value={s}/>)}</datalist>
+            </div>
+            <div className="form-group"><label style={{fontSize:10}}>{i===0 ? t('qty') : ''}</label><input className="form-input" type="number" value={it.quantidade} onChange={e=>uItem(i,'quantidade',e.target.value)}/></div>
+            <div className="form-group"><label style={{fontSize:10}}>{i===0 ? t('cost') : ''}</label><input className="form-input" type="number" value={it.custoReal} onChange={e=>uItem(i,'custoReal',e.target.value)}/></div>
+            <button className="btn btn-ghost btn-sm" onClick={()=>removeItem(i)} style={{marginBottom:1}}><Trash2 size={13}/></button>
+          </div>
+        );
+      })}
       <button className="btn btn-secondary btn-sm" onClick={addItem}><Plus size={13}/> {t('add_item')}</button>
       <div className="preview-box">{t('order_total')}: <strong>{fmt(total)}</strong></div>
     </Modal>
