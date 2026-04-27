@@ -9,7 +9,7 @@ import {
   Calendar, TrendingDown, AlertTriangle, X, Trash2, ArrowUpRight,
   ArrowDownRight, DollarSign, BarChart3, Target, Award, Users,
   FileText, Info, PackageOpen, CreditCard, Truck, ChevronDown, Globe, Check,
-  Minus, Edit3, Clock, LogOut
+  Minus, Edit3, Clock, LogOut, Menu
 } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useFirestoreData } from './useFirestoreData';
@@ -337,8 +337,8 @@ const EmptyState = ({ title, desc, action, onAction }) => (
 
 // â”€â”€â”€ Modal Wrapper â”€â”€â”€
 const Modal = ({ title, onClose, children, footer }) => (
-  <div className="modal-overlay" onClick={onClose}>
-    <div className="modal" onClick={e => e.stopPropagation()}>
+  <div className="modal-overlay">
+    <div className="modal">
       <div className="modal-header">
         <h3>{title}</h3>
         <button className="btn btn-ghost btn-sm" onClick={onClose}><X size={16}/></button>
@@ -381,6 +381,7 @@ export default function Dashboard() {
   }, [state]);
   const [page, setPage] = useState('dashboard');
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [modal, setModal] = useState(null);
 
   // Computed metrics
@@ -392,7 +393,7 @@ export default function Dashboard() {
   const metrics = useMemo(() => {
     // Total numbers
     const fat = state.vendas.reduce((s, v) => s + v.valorFinal, 0);
-    const custos = state.vendas.reduce((s, v) => s + v.custoUnitario + custoFixoPorUnidade, 0);
+    const custos = state.vendas.reduce((s, v) => s + v.custoUnitario + custoFixoPorUnidade * (v.quantidade || 1), 0);
     const lucro = fat - custos;
     const margem = fat > 0 ? (lucro / fat) * 100 : 0;
     
@@ -421,10 +422,10 @@ export default function Dashboard() {
       
       if (vM === currentMonth && vY === currentYear) {
         fatAtual += v.valorFinal;
-        custosAtual += v.custoUnitario + custoFixoPorUnidade;
+        custosAtual += v.custoUnitario + custoFixoPorUnidade * (v.quantidade || 1);
       } else if (vM === prevMonth && vY === prevYear) {
         fatAnterior += v.valorFinal;
-        custosAnterior += v.custoUnitario + custoFixoPorUnidade;
+        custosAnterior += v.custoUnitario + custoFixoPorUnidade * (v.quantidade || 1);
       }
     });
 
@@ -456,7 +457,7 @@ export default function Dashboard() {
     const melhorCanal = Object.entries(canalCount).sort((a, b) => b[1] - a[1])[0];
     
     const prodLucro = {};
-    state.vendas.forEach(v => { prodLucro[v.produto] = (prodLucro[v.produto] || 0) + (v.valorFinal - v.custoUnitario - custoFixoPorUnidade); });
+    state.vendas.forEach(v => { prodLucro[v.produto] = (prodLucro[v.produto] || 0) + (v.valorFinal - v.custoUnitario - custoFixoPorUnidade * (v.quantidade || 1)); });
     const melhorProduto = Object.entries(prodLucro).sort((a, b) => b[1] - a[1])[0];
     
     const melhorVenda = [...state.vendas].sort((a, b) => b.valorFinal - a.valorFinal)[0];
@@ -494,21 +495,21 @@ export default function Dashboard() {
     <I18nContext.Provider value={{ lang, setLang, t }}>
       <div className="app-layout">
       {/* Sidebar */}
-      <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+      <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileNavOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-logo">
           <div className="logo-icon">N</div>
           <span className="logo-text">Noize</span>
         </div>
         <nav className="sidebar-nav">
           {NAV.map(n => (
-            <div key={n.id} className={`sidebar-nav-item ${page === n.id ? 'active' : ''}`} onClick={() => setPage(n.id)}>
+            <div key={n.id} className={`sidebar-nav-item ${page === n.id ? 'active' : ''}`} onClick={() => { setPage(n.id); setMobileNavOpen(false); }}>
               <span className="nav-icon"><n.icon size={18}/></span>
               <span className="nav-label">{n.label}</span>
             </div>
           ))}
         </nav>
         <div className="sidebar-footer">
-          <div className="sidebar-nav-item" onClick={() => setPage('config')}>
+          <div className="sidebar-nav-item" onClick={() => { setPage('config'); setMobileNavOpen(false); }}>
             <span className="nav-icon"><Settings size={18}/></span>
             <span className="nav-label">{t('settings')}</span>
           </div>
@@ -517,11 +518,15 @@ export default function Dashboard() {
           </button>
         </div>
       </aside>
+      {mobileNavOpen && <div className="sidebar-backdrop" onClick={() => setMobileNavOpen(false)} />}
 
       {/* Main */}
       <div className="main-content">
         <header className="header">
           <div className="header-left">
+            <button className="mobile-menu-btn" onClick={() => setMobileNavOpen(true)} aria-label="Open menu">
+              <Menu size={20}/>
+            </button>
             <h1 className="header-title">{NAV.find(n => n.id === page)?.label || t('settings')}</h1>
           </div>
           <div className="header-right">
@@ -589,7 +594,7 @@ function PageDashboard({ metrics, state, dispatch, setModal, chartDataVendas, ch
   const timesLucrativos = useMemo(() => {
     const m = {};
     state.vendas.forEach(v => {
-      const lucro = v.valorFinal - v.custoUnitario - custoFixoPorUnidade;
+      const lucro = v.valorFinal - v.custoUnitario - custoFixoPorUnidade * (v.quantidade || 1);
       m[v.produto] = (m[v.produto] || 0) + lucro;
     });
     return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 5);
@@ -760,7 +765,7 @@ function PageVendas({ state, dispatch, setModal, custoFixoPorUnidade }) {
               <thead><tr><th>{t('date')}</th><th>{t('product')}</th><th>{t('channel')}</th><th>{t('amount')}</th><th>{t('payment')}</th><th>{t('profit')}</th><th>{t('margin')}</th><th>Vendedor</th><th>{t('actions')}</th></tr></thead>
               <tbody>
                 {state.vendas.filter(v => filterCanal === 'All' || v.canal === filterCanal).map(v => {
-                  const lucro = v.valorFinal - v.custoUnitario - custoFixoPorUnidade;
+                  const lucro = v.valorFinal - v.custoUnitario - custoFixoPorUnidade * (v.quantidade || 1);
                   const margem = v.valorFinal > 0 ? (lucro / v.valorFinal) * 100 : 0;
                   return (
                     <tr key={v.id}>
@@ -1051,7 +1056,7 @@ function PageMargens({ state, custoFixoPorUnidade }) {
   const { t } = useI18n();
   const [tab, setTab] = useState('venda');
   const fat = state.vendas.reduce((s, v) => s + v.valorFinal, 0);
-  const custos = state.vendas.reduce((s, v) => s + v.custoUnitario + custoFixoPorUnidade, 0);
+  const custos = state.vendas.reduce((s, v) => s + v.custoUnitario + custoFixoPorUnidade * (v.quantidade || 1), 0);
   const lucro = fat - custos;
   const margem = fat > 0 ? (lucro / fat) * 100 : 0;
   return (
@@ -1085,28 +1090,28 @@ function PageMargens({ state, custoFixoPorUnidade }) {
 function TableMargemVenda({ vendas, cpfu }) {
   const { t } = useI18n();
   return (<table><thead><tr><th>{t('date')}</th><th>{t('product')}</th><th>{t('revenue')}</th><th>{t('cost_per_unit')}</th><th>{t('profit')}</th><th>{t('margin')}</th></tr></thead><tbody>
-    {vendas.map(v => { const l = v.valorFinal - v.custoUnitario - cpfu; const m = v.valorFinal > 0 ? (l/v.valorFinal)*100 : 0; return (
-      <tr key={v.id}><td>{fmtDate(v.data)}</td><td style={{color:'#fff'}}>{v.produto}</td><td>{fmt(v.valorFinal)}</td><td>{fmt(v.custoUnitario + cpfu)}</td><td style={{color:l>=0?'#10b981':'#ef4444',fontWeight:600}}>{fmt(l)}</td><td><span className={`badge ${m>=20?'badge-success':m>=10?'badge-warning':'badge-danger'}`}>{fmtPct(m)}</span></td></tr>
+    {vendas.map(v => { const cf = cpfu * (v.quantidade || 1); const l = v.valorFinal - v.custoUnitario - cf; const m = v.valorFinal > 0 ? (l/v.valorFinal)*100 : 0; return (
+      <tr key={v.id}><td>{fmtDate(v.data)}</td><td style={{color:'#fff'}}>{v.produto}</td><td>{fmt(v.valorFinal)}</td><td>{fmt(v.custoUnitario + cf)}</td><td style={{color:l>=0?'#10b981':'#ef4444',fontWeight:600}}>{fmt(l)}</td><td><span className={`badge ${m>=20?'badge-success':m>=10?'badge-warning':'badge-danger'}`}>{fmtPct(m)}</span></td></tr>
     );})}
   </tbody></table>);
 }
 function TableMargemProduto({ vendas, cpfu }) {
   const { t } = useI18n();
-  const m = {}; vendas.forEach(v => { if(!m[v.produto]) m[v.produto]={fat:0,custo:0,qtd:0}; m[v.produto].fat+=v.valorFinal; m[v.produto].custo+=v.custoUnitario+cpfu; m[v.produto].qtd++; });
+  const m = {}; vendas.forEach(v => { const q=v.quantidade||1; if(!m[v.produto]) m[v.produto]={fat:0,custo:0,qtd:0}; m[v.produto].fat+=v.valorFinal; m[v.produto].custo+=v.custoUnitario+cpfu*q; m[v.produto].qtd+=q; });
   return (<table><thead><tr><th>{t('product')}</th><th>{t('sales')}</th><th>{t('revenue')}</th><th>{t('cost_per_unit')}</th><th>{t('profit')}</th><th>{t('margin')}</th></tr></thead><tbody>
     {Object.entries(m).map(([p,d])=>{ const l=d.fat-d.custo; const mg=d.fat>0?(l/d.fat)*100:0; return <tr key={p}><td style={{color:'#fff'}}>{p}</td><td>{d.qtd}</td><td>{fmt(d.fat)}</td><td>{fmt(d.custo)}</td><td style={{color:l>=0?'#10b981':'#ef4444',fontWeight:600}}>{fmt(l)}</td><td><span className={`badge ${mg>=20?'badge-success':mg>=10?'badge-warning':'badge-danger'}`}>{fmtPct(mg)}</span></td></tr>; })}
   </tbody></table>);
 }
 function TableMargemCanal({ vendas, cpfu }) {
   const { t } = useI18n();
-  const m = {}; vendas.forEach(v => { if(!m[v.canal]) m[v.canal]={fat:0,custo:0,qtd:0}; m[v.canal].fat+=v.valorFinal; m[v.canal].custo+=v.custoUnitario+cpfu; m[v.canal].qtd++; });
+  const m = {}; vendas.forEach(v => { const q=v.quantidade||1; if(!m[v.canal]) m[v.canal]={fat:0,custo:0,qtd:0}; m[v.canal].fat+=v.valorFinal; m[v.canal].custo+=v.custoUnitario+cpfu*q; m[v.canal].qtd+=q; });
   return (<table><thead><tr><th>{t('channel')}</th><th>{t('sales')}</th><th>{t('revenue')}</th><th>{t('cost_per_unit')}</th><th>{t('profit')}</th><th>{t('margin')}</th></tr></thead><tbody>
     {Object.entries(m).map(([p,d])=>{ const l=d.fat-d.custo; const mg=d.fat>0?(l/d.fat)*100:0; return <tr key={p}><td><span className="badge badge-purple">{p}</span></td><td>{d.qtd}</td><td>{fmt(d.fat)}</td><td>{fmt(d.custo)}</td><td style={{color:l>=0?'#10b981':'#ef4444',fontWeight:600}}>{fmt(l)}</td><td><span className={`badge ${mg>=20?'badge-success':mg>=10?'badge-warning':'badge-danger'}`}>{fmtPct(mg)}</span></td></tr>; })}
   </tbody></table>);
 }
 function TableMargemCliente({ vendas, cpfu }) {
   const { t } = useI18n();
-  const m = {}; vendas.forEach(v => { const c=v.cliente||'Unknown'; if(!m[c]) m[c]={fat:0,custo:0,qtd:0}; m[c].fat+=v.valorFinal; m[c].custo+=v.custoUnitario+cpfu; m[c].qtd++; });
+  const m = {}; vendas.forEach(v => { const q=v.quantidade||1; const c=v.cliente||'Unknown'; if(!m[c]) m[c]={fat:0,custo:0,qtd:0}; m[c].fat+=v.valorFinal; m[c].custo+=v.custoUnitario+cpfu*q; m[c].qtd+=q; });
   return (<table><thead><tr><th>Cliente</th><th>{t('qty')}</th><th>{t('revenue')}</th><th>{t('cost_per_unit')}</th><th>{t('profit')}</th><th>{t('margin')}</th></tr></thead><tbody>
     {Object.entries(m).map(([p,d])=>{ const l=d.fat-d.custo; const mg=d.fat>0?(l/d.fat)*100:0; return <tr key={p}><td style={{color:'#fff'}}>{p}</td><td>{d.qtd}</td><td>{fmt(d.fat)}</td><td>{fmt(d.custo)}</td><td style={{color:l>=0?'#10b981':'#ef4444',fontWeight:600}}>{fmt(l)}</td><td><span className={`badge ${mg>=20?'badge-success':mg>=10?'badge-warning':'badge-danger'}`}>{fmtPct(mg)}</span></td></tr>; })}
   </tbody></table>);
@@ -1372,7 +1377,7 @@ function Toggle({ defaultOn = false }) {
 function ModalVenda({ state, dispatch, user, onClose }) {
   const { t } = useI18n();
   const [tipo, setTipo] = useState('estoque');
-  const [form, setForm] = useState({ produto:'', tamanho:'', estoqueItemId:null, canal:'Amazon', pagamento:'Credit Card', valorOriginal:'', desconto:'0', cliente:'', custoUnitario:'', obs:'' });
+  const [form, setForm] = useState({ produto:'', tamanho:'', estoqueItemId:null, canal:'Amazon', pagamento:'Credit Card', valorOriginal:'', desconto:'0', quantidade:'1', cliente:'', custoUnitario:'', obs:'' });
   const u = (k,v) => setForm(p => ({...p, [k]: v}));
   const pickEstoqueItem = (idStr) => {
     const item = state.estoque.find(e => String(e.id) === String(idStr));
@@ -1380,12 +1385,20 @@ function ModalVenda({ state, dispatch, user, onClose }) {
       ? { ...p, estoqueItemId: item.id, produto: item.produto, tamanho: item.tamanho, custoUnitario: p.custoUnitario || String(item.custoMedio || '') }
       : { ...p, estoqueItemId: null, produto: '', tamanho: '' });
   };
-  const valorFinal = (parseFloat(form.valorOriginal)||0) - (parseFloat(form.desconto)||0);
+  const qtd = Math.max(1, parseInt(form.quantidade)||1);
+  const estoqueItem = tipo === 'estoque' ? state.estoque.find(e => e.id === form.estoqueItemId) : null;
+  const estoqueDisponivel = estoqueItem?.quantidade ?? 0;
+  const qtdInvalida = tipo === 'estoque' && estoqueItem && qtd > estoqueDisponivel;
+  const valorFinal = ((parseFloat(form.valorOriginal)||0) - (parseFloat(form.desconto)||0)) * qtd;
   const save = () => {
     if(!form.produto || !form.valorOriginal) return;
     if(tipo === 'estoque' && form.estoqueItemId == null) return;
+    if(qtdInvalida) return;
     const vendedorNome = user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || 'Desconhecido';
-    dispatch({ type: 'ADD_VENDA', payload: { data: new Date().toISOString().slice(0,10), produto: form.produto, tamanho: form.tamanho, estoqueItemId: tipo === 'estoque' ? form.estoqueItemId : null, canal: form.canal, pagamento: form.pagamento, valorOriginal: parseFloat(form.valorOriginal), desconto: parseFloat(form.desconto)||0, valorFinal, custoUnitario: parseFloat(form.custoUnitario)||0, cliente: form.cliente, obs: form.obs, tipo, vendedor: vendedorNome }});
+    const valorOriginalTotal = (parseFloat(form.valorOriginal)||0) * qtd;
+    const descontoTotal = (parseFloat(form.desconto)||0) * qtd;
+    const custoTotal = (parseFloat(form.custoUnitario)||0) * qtd;
+    dispatch({ type: 'ADD_VENDA', payload: { data: new Date().toISOString().slice(0,10), produto: form.produto, tamanho: form.tamanho, estoqueItemId: tipo === 'estoque' ? form.estoqueItemId : null, canal: form.canal, pagamento: form.pagamento, valorOriginal: valorOriginalTotal, desconto: descontoTotal, valorFinal, custoUnitario: custoTotal, quantidade: qtd, cliente: form.cliente, obs: form.obs, tipo, vendedor: vendedorNome }});
     onClose();
   };
   const switchTipo = (next) => {
@@ -1418,6 +1431,8 @@ function ModalVenda({ state, dispatch, user, onClose }) {
         <div className="form-group"><label>{t('discount')} $</label><input className="form-input" type="number" value={form.desconto} onChange={e=>u('desconto',e.target.value)}/></div>
         <div className="form-group"><label>{t('cost')} $</label><input className="form-input" type="number" value={form.custoUnitario} onChange={e=>u('custoUnitario',e.target.value)}/></div>
       </div>
+      <div className="form-group"><label>{t('qty')}{tipo==='estoque' && estoqueItem ? ` (max ${estoqueDisponivel})` : ''}</label><input className="form-input" type="number" min="1" value={form.quantidade} onChange={e=>u('quantidade',e.target.value)}/></div>
+      {qtdInvalida && <div style={{color:'#ef4444',fontSize:12,marginTop:-8,marginBottom:8}}>Quantidade maior que o estoque disponível.</div>}
       <div className="preview-box">{t('final_price')}: <strong>{fmt(valorFinal)}</strong></div>
       <div className="form-group"><label>{t('notes')}</label><textarea className="form-textarea" value={form.obs} onChange={e=>u('obs',e.target.value)}/></div>
     </Modal>
@@ -1562,7 +1577,7 @@ function PageCadastros({ state, dispatch, setModal }) {
   const lista = tab === 'cliente' ? (state.clientes || []) : (state.fornecedores || []);
   const isCli = tab === 'cliente';
   const labels = lang === 'pt'
-    ? { cli: 'Clientes', forn: 'Fornecedores', novoCli: 'Novo Cliente', novoForn: 'Novo Fornecedor', nome: 'Nome', email: 'Email', tel: 'Telefone', doc: 'CPF/CNPJ', obs: 'Observações', vazio: 'Nenhum cadastro ainda', acoes: 'Ações' }
+    ? { cli: 'Clientes', forn: 'Fornecedores', novoCli: 'Novo Cliente', novoForn: 'Novo Fornecedor', nome: 'Nome', email: 'Email', tel: 'Telefone', doc: 'Tax ID', obs: 'Observações', vazio: 'Nenhum cadastro ainda', acoes: 'Ações' }
     : { cli: 'Customers', forn: 'Suppliers', novoCli: 'New Customer', novoForn: 'New Supplier', nome: 'Name', email: 'Email', tel: 'Phone', doc: 'Tax ID', obs: 'Notes', vazio: 'No records yet', acoes: 'Actions' };
   return (
     <div>
@@ -1618,7 +1633,7 @@ function ModalCadastro({ tipoInicial = 'cliente', dispatch, onClose }) {
   const [form, setForm] = useState({ nome:'', email:'', telefone:'', documento:'', obs:'' });
   const u = (k,v) => setForm(p => ({ ...p, [k]: v }));
   const labels = lang === 'pt'
-    ? { titulo: 'Novo Cadastro', cli: 'Cliente', forn: 'Fornecedor', nome: 'Nome', email: 'Email', tel: 'Telefone', doc: 'CPF/CNPJ', obs: 'Observações', salvar: 'Salvar', cancelar: 'Cancelar' }
+    ? { titulo: 'Novo Cadastro', cli: 'Cliente', forn: 'Fornecedor', nome: 'Nome', email: 'Email', tel: 'Telefone', doc: 'Tax ID', obs: 'Observações', salvar: 'Salvar', cancelar: 'Cancelar' }
     : { titulo: 'New Contact', cli: 'Customer', forn: 'Supplier', nome: 'Name', email: 'Email', tel: 'Phone', doc: 'Tax ID', obs: 'Notes', salvar: 'Save', cancelar: 'Cancel' };
   const save = () => {
     if (!form.nome.trim()) return;

@@ -61,12 +61,13 @@ export function reducer(state, action) {
   switch (action.type) {
     case 'ADD_VENDA': {
       const venda = { ...action.payload, id: Date.now() };
+      const qtd = venda.quantidade || 1;
       let estoque = state.estoque;
       if (venda.tipo === 'estoque') {
         const idx = findEstoqueIndexForVenda(estoque, venda);
         if (idx >= 0) {
           estoque = estoque.map((e, i) =>
-            i === idx ? { ...e, quantidade: Math.max(0, e.quantidade - 1) } : e
+            i === idx ? { ...e, quantidade: Math.max(0, e.quantidade - qtd) } : e
           );
         }
       }
@@ -103,9 +104,10 @@ export function reducer(state, action) {
       let estoque = state.estoque;
       if (venda?.tipo === 'estoque') {
         const idx = findEstoqueIndexForVenda(estoque, venda);
+        const qtd = venda.quantidade || 1;
         if (idx >= 0) {
           estoque = estoque.map((e, i) =>
-            i === idx ? { ...e, quantidade: e.quantidade + 1 } : e
+            i === idx ? { ...e, quantidade: e.quantidade + qtd } : e
           );
         }
       }
